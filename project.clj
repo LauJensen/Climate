@@ -3,8 +3,8 @@
   :url              "http://www.bestinclass.dk"
   :library-path     "lib/"
   :namespaces       [climate]
-  :dependencies     [[org.clojure/clojure "1.1.0-alpha-SNAPSHOT"]
-		     [org.clojure/clojure-contrib "1.1.0-alpha-SNAPSHOT"]]
+  :dependencies     [[org.clojure/clojure "1.1.0-new-SNAPSHOT"]
+		     [org.clojure/clojure-contrib "1.1.0-new-SNAPSHOT"]]
   :dev-dependencies [[swank-clojure "1.1.0"]])
 
 

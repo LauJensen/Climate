@@ -14,8 +14,7 @@
   [tarstream tarentry]
   (with-open [zipfile (->> (dump-stream tarstream (.getSize tarentry))
 			   GZIPInputStream. InputStreamReader. BufferedReader.)]
-    (->> (for [line (repeatedly #(.readLine zipfile)) :while line] line)
-	 doall)))
+    (doall (for [line (repeatedly #(.readLine zipfile)) :while line] line))))
 
 (defn cols [strdata]
   (->> (.split strdata " ") (remove empty?)))
@@ -33,7 +32,7 @@
 
 (defn process-tarball
   [filename stn-ids wban-ids]
-  (-> (str "Parsing: " (.getName filename)) println flush)
+  (println "Parsing: " (.getName filename)) (flush)
   (let [tarstream    (->> filename FileInputStream. TarInputStream.)
 	readings     (extract-readings tarstream stn-ids wban-ids)]
     {:year (re-find #"\d{4}" (.getName filename))
@@ -47,8 +46,7 @@
 	north  (for [station data :when (= \+ (nth station 58))]
 		 (vec (take 2 (.split station " "))))]
     (reduce #(assoc %1  :stn  (conj (:stn %1) (%2 0))
-   		        :wban (conj (:wban %1) (%2 1)))
-	    {} north)))
+		    :wban (conj (:wban %1) (%2 1))) {} north)))
 
 (defn get-stations [filename]
   (let [tarstream    (->> filename FileInputStream. TarInputStream.)
@@ -62,26 +60,32 @@
 
 (defn get-station-series [base start end]
   (apply merge-with into
-	 (for [i (range start (inc end))]
-	   (get-stations
-	    (str base (if (not= \/ (last base)) "/") "gsod_" i ".tar")))))
+    (for [i (range start (inc end))]
+      (get-stations
+       (str base (if (not= \/ (last base)) "/") "gsod_" i ".tar")))))
 
 (defn process-weather-data
-  [dataset history-file output]
-  (let [stations   (northern-stations history-file)
-	;s1940      (get-station-series "/home/lau/Desktop/dataset" 1929 1940)
-	;s1929      (get-stations "/home/lau/Desktop/dataset/gsod_1929.tar")
-	;stn-ids    (set (filter #((set (:stn stations)) %) (:stn s1929)))
-	;wban-ids   (set (filter #((set (:wban stations)) %) (:wban s1929)))
-	stn-ids    (disj (set (:stn stations)) "99999")
-	wban-ids   (disj (set (:wban stations)) "999999")
-	dataset    (->> (File. dataset) file-seq (filter #(.isFile %)) sort)
-	headers    [:stn :wban :yearmoda :temp]
-	result     (->> dataset
-			(pmap #(process-tarball % stn-ids wban-ids headers))
-			doall)]
-    (spit output (sort-by :year result))
-    (println "Done")))
+  [dataset history-file stations output]
+  (let [dataset   (->> (File. dataset) file-seq (filter #(.isFile %)) sort)
+	nstations (northern-stations history-file)
+	stn-ids   (set (filter #((set (:stn  nstations)) %) (:stn  stations)))
+	wban-ids  (set (filter #((set (:wban nstations)) %) (:wban stations)))
+	headers   [:stn :wban :yearmoda :temp]
+	result    (->> dataset
+		       (pmap #(process-tarball % stn-ids wban-ids))
+		       doall)
+	low-year  (remove #(nil? (:mean %)) (sort-by :mean result))
+	high-year (last low-year)
+	low-year  (first low-year)]
+      (println (format "Stations tracked: %s" (+ (count stn-ids)
+						 (count wban-ids))))
+      (println (format "Lowest temperature: %s (%s)"
+		       (:year low-year)(:mean low-year)))
+      (println (format "Warmest temperature: %s (%s)"
+		       (:year high-year)(:mean high-year))))
+  (println "Done"))
 
-user> (->> [1 2 3] (map inc) | (map inc) vec (range 1 4) <<-)
-[2 2 3 3 4 4]
+(let [tracked-stations  (get-stations "res/dataset/gsod_1929.tar")]
+;      tracked-stations  (get-station-series "res/dataset" 1929 1940)]
+  (process-weather-data "res/dataset/" "res/history" tracked-stations
+       "stations-from-1929-2"))
