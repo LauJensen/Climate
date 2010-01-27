@@ -21,24 +21,37 @@
 
 (defn extract-readings
   [tarstream stn-ids wban-ids]
-  (->> (Double. (nth (cols data) 3))
-       (for [data (rest (line-stream tarstream file))])
-       (for [file (repeatedly #(.getNextEntry tarstream))
-	     :while file
-	     :when (let [[_ stn wban] (re-find #"(\d+)-(\d+)" (.getName file))]
-		     (and (not (.isDirectory file))
-			  (or (stn-ids stn) (wban-ids wban))))])
-       flatten))
+  (doall
+   (flatten
+    (for [file (repeatedly #(.getNextEntry tarstream))
+	 :while file
+	 :when (let [[_ stn wban] (re-find #"(\d+)-(\d+)" (.getName file))]
+		 (and (not (.isDirectory file))
+		      (or (stn-ids stn) (wban-ids wban))))]
+      (for [data (rest (line-stream tarstream file))]
+	{:id   (.getName file)
+	 :temp (Double. (nth (cols data) 3))})))))
 
 (defn process-tarball
   [filename stn-ids wban-ids]
   (println "Parsing: " (.getName filename)) (flush)
   (let [tarstream    (->> filename FileInputStream. TarInputStream.)
 	readings     (extract-readings tarstream stn-ids wban-ids)]
-    {:year (re-find #"\d{4}" (.getName filename))
-     :mean (if-let [cnt (count readings)]
-	     (when-not (zero? cnt)
-	       (/ (reduce + readings) cnt)))}))
+    {:year  (re-find #"\d{4}" (.getName filename))
+     :reads (->> (for [uid  (distinct (map :id readings))]
+		   (let [temps (->> (filter #(= uid (:id %)) readings)
+				    (map :temp))]
+		     (if-let [cnt (count temps)]
+		       (when-not (zero? cnt)
+			 {:uid (->> (re-find #"(\d+)-(\d+)" uid)
+				    (take 2)
+				    (apply str))
+			  :mean (/ (reduce + temps) cnt)}))))
+		 doall)}))		 
+		
+;     :mean (if-let [cnt (count readings)]
+;	     (when-not (zero? cnt)
+;	       (/ (reduce + readings) cnt)))}))
 
 (defn northern-stations [filename]
   (println "Generating list of stations from the northern hemisphere...")
