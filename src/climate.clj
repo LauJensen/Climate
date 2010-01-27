@@ -64,6 +64,17 @@
       (get-stations
        (str base (if (not= \/ (last base)) "/") "gsod_" i ".tar")))))
 
+(defn emit-dataset [data]
+  (let [uids (distinct (flatten (map #(map :uid %) (map :reads data))))]
+    (with-out-str
+      (doseq [{:keys [year reads]} data]
+	(print year)
+	(doseq [uid uids]
+	  (if-let [reading (first (filter #(= uid (:uid %)) reads))]
+	    (print "," (:mean reading))
+	    (print ",null")))
+	(println "")))))
+
 (defn process-weather-data
   [dataset history-file stations output]
   (let [dataset   (->> (File. dataset) file-seq (filter #(.isFile %)) sort)
