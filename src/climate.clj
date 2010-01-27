@@ -48,10 +48,6 @@
 				    (apply str))
 			  :mean (/ (reduce + temps) cnt)}))))
 		 doall)}))		 
-		
-;     :mean (if-let [cnt (count readings)]
-;	     (when-not (zero? cnt)
-;	       (/ (reduce + readings) cnt)))}))
 
 (defn northern-stations [filename]
   (println "Generating list of stations from the northern hemisphere...")
@@ -95,21 +91,8 @@
 	stn-ids   (set (filter #((set (:stn  nstations)) %) (:stn  stations)))
 	wban-ids  (set (filter #((set (:wban nstations)) %) (:wban stations)))
 	headers   [:stn :wban :yearmoda :temp]
-	result    (->> dataset
-		       (pmap #(process-tarball % stn-ids wban-ids))
-		       doall)
-	low-year  (remove #(nil? (:mean %)) (sort-by :mean result))
-	high-year (last low-year)
-	low-year  (first low-year)]
-      (println (format "Stations tracked: %s" (+ (count stn-ids)
-						 (count wban-ids))))
-      (println (format "Lowest temperature: %s (%s)"
-		       (:year low-year)(:mean low-year)))
-      (println (format "Warmest temperature: %s (%s)"
-		       (:year high-year)(:mean high-year))))
-  (println "Done"))
-
-(let [tracked-stations  (get-stations "res/dataset/gsod_1929.tar")]
-;      tracked-stations  (get-station-series "res/dataset" 1929 1940)]
-  (process-weather-data "res/dataset/" "res/history" tracked-stations
-       "stations-from-1929-2"))
+	result    (doall
+		   (pmap #(process-tarball % stn-ids wban-ids) dataset))]    
+    (spit output (emit-dataset result))
+    (spit (str output ".raw") (with-out-str (prn result)))
+    (println "Done")))
